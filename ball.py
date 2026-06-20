@@ -1,9 +1,9 @@
-
 from math import hypot
 from pygame import *
 from random import randint
 from socket import socket, AF_INET, SOCK_STREAM
 from threading import Thread
+import random
 
 # Налаштування мережі
 HOST = "127.0.0.1"
@@ -16,7 +16,7 @@ resv_data = sock.recv(64).decode().split(",")
 my_id, my_x, my_y, my_r = map(int, resv_data)
 
 # Налаштування вікна
-size = (1000, 800)
+size = (1000, 750)
 init()
 window = display.set_mode(size)
 clock = time.Clock()
@@ -25,7 +25,7 @@ all_players = {}  # Словник {id: [x, y, r]}
 
 players_img = image.load("images/player.png")
 enemy_img = image.load("images/enemy.png")
-bg_img = image.load("images/bg.jpg")
+bg_img = image.load("images/back.jpg")
 
 def receive_data():
     global all_players, lose
@@ -76,17 +76,22 @@ class Ball:
                 self.radius += cell.radius * 0.2
                 cells.remove(cell)
 
-    def draw(self, surface, camera_x, camera_y, camera_scale):
+    def draw(self, surface, camera_x, camera_y, camera_scale, img=None):
         sx = int((self.x - camera_x) * camera_scale + size[0] // 2)
         sy = int((self.y - camera_y) * camera_scale + size[1] // 2)
         r = int(self.radius * camera_scale)
-        draw.circle(surface, self.color, (sx, sy), max(2, r))
+        # draw.circle(surface, self.color, (sx, sy), max(2, r))
+
+        if img:
+            scaled_img = transform.scale(img, (r * 2, r * 2))
+            surface.blit(scaled_img, (sx - r, sy - r))
+        else:
+            draw.circle(surface, self.color, (sx, sy), max(2, r))
 
     def collidecircle(self, ball2):
         distance = hypot(self.x - ball2.x, self.y - ball2.y)
         return distance < (self.radius + ball2.radius)
 
-# TODO: МИ ТУТ ЗУПИНИЛИСЯ!!!!
 # Ініціалізація
 ball = Ball(my_x, my_y, my_r, (0, 255, 100), speed=15)
 cells = [Ball(randint(-2000, 2000), randint(-2000, 2000), 10, (200, 200, 0)) for _ in range(300)]
@@ -103,12 +108,17 @@ while running:
 
     window.fill((40, 40, 40))
 
+    # Вираховуємо масштабований розмір фону
     bg_scaled_size = int(WORLD_SIZE * ball.scale)
     scaled_bg = transform.scale(bg_img, (bg_scaled_size, bg_scaled_size))
 
+    # Координата -2000 — це верхній лівий кут нашого основного світу
     base_bg_x = int((-2000 - ball.x) * ball.scale + size[0] // 2)
-    base_bg_y = int((-2000 - ball.x) * ball.scale + size[1] // 2)
+    base_bg_y = int((-2000 - ball.y) * ball.scale + size[1] // 2)
 
+    # НОВЕ: Логіка нескінченного фону ("спавн" нових тайлів за краями)
+    # Знаходимо найближчу до лівого верхнього кута екрану точку прив'язки фону.
+    # Остача від ділення (%) забезпечує плавний перехід без розривів.
     start_x = (base_bg_x % bg_scaled_size) - bg_scaled_size
     start_y = (base_bg_y % bg_scaled_size) - bg_scaled_size
 
@@ -133,10 +143,11 @@ while running:
         sy = int((oy - ball.y) * ball.scale + size[1] // 2)
         r = max(4, int(orad * ball.scale))
 
-        scaled_enemy = transform.scale(enemy_img)
+        scaled_enemy = transform.scale(enemy_img, (r * 2, r * 2))
+        window.blit(scaled_enemy, (sx - r, sy - r))
 
     if not lose:
-        ball.draw(window, ball.x, ball.y, 1.0 if ball.radius < 60 else ball.scale)
+        ball.draw(window, ball.x, ball.y, 1.0 if ball.radius < 60 else ball.scale, img=players_img)
     else:
         window.blit(f.render("U lose!", 1, (244, 0, 0)), (400, 500))
 
